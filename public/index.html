@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Art-Battle AI Contest | Multiplayer Drawing</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;800&family=Righteous&display=swap" rel="stylesheet">
+    <!-- Socket.io -->
+    <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Poppins', 'sans-serif'],
+                        'display': ['Righteous', 'cursive'],
+                    },
+                    colors: {
+                        neon: {
+                            pink: '#ff2a6d',
+                            cyan: '#05d9e8',
+                            blue: '#01012b',
+                            dark: '#0a0a0a'
+                        }
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'slide-in': 'slideIn 0.3s ease-out forwards',
+                        'scan': 'scan 2s linear infinite',
+                        'bounce-slow': 'bounce 3s infinite',
+                    },
+                    keyframes: {
+                        slideIn: {
+                            '0%': { transform: 'translateY(50px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                        scan: {
+                            '0%': { top: '0%' },
+                            '50%': { top: '100%' },
+                            '100%': { top: '0%' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            background-color: #01012b;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(255, 42, 109, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(5, 217, 232, 0.15) 0px, transparent 50%);
+            overscroll-behavior-y: none;
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .neon-text-cyan { text-shadow: 0 0 10px #05d9e8, 0 0 20px #05d9e8; }
+        .neon-text-pink { text-shadow: 0 0 10px #ff2a6d, 0 0 20px #ff2a6d; }
+        .neon-text-yellow { text-shadow: 0 0 10px #fbbf24, 0 0 20px #fbbf24; }
+        .neon-border-cyan { box-shadow: 0 0 10px #05d9e8, inset 0 0 10px #05d9e8; border-color: #05d9e8; }
+        .neon-border-pink { box-shadow: 0 0 10px #ff2a6d, inset 0 0 10px #ff2a6d; border-color: #ff2a6d; }
+        
+        #gameCanvas {
+            touch-action: none;
+            background-color: #ffffff;
+            cursor: crosshair;
+        }
+
+        /* Sleek custom scrollbars for mobile app feel */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(5, 217, 232, 0.5); }
+    </style>
+</head>
+<body class="h-screen w-screen text-white overflow-hidden flex flex-col relative">
+
+    <!-- Custom Dialog Box (Replaces alert, prompt, confirm) -->
+    <div id="customDialog" class="absolute inset-0 z-[200] hidden items-center justify-center bg-black/80 backdrop-blur-md transition-opacity">
+        <div class="bg-gray-900 p-6 rounded-3xl max-w-sm w-11/12 text-center border border-white/10 shadow-[0_0_30px_rgba(5,217,232,0.3)] animate-slide-in relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-cyan to-neon-pink"></div>
+            <h3 id="dialogTitle" class="text-2xl font-bold text-white mb-2 mt-2">Notice</h3>
+            <p id="dialogMessage" class="text-gray-300 mb-6 text-sm font-medium"></p>
+            <input type="text" id="dialogInput" class="hidden w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3.5 text-white mb-6 focus:border-neon-cyan outline-none text-center transition-all">
+            <div class="flex gap-3 justify-center">
+                <button id="dialogCancel" class="hidden flex-1 px-4 py-3.5 bg-white/5 rounded-xl text-gray-300 hover:bg-white/10 hover:text-white transition font-semibold">Cancel</button>
+                <button id="dialogConfirm" class="flex-1 px-4 py-3.5 bg-neon-cyan hover:bg-cyan-400 text-black font-bold rounded-xl shadow-[0_5px_15px_rgba(5,217,232,0.4)] transition transform hover:-translate-y-0.5">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- OVERLAY: About Us Screen -->
+    <div id="aboutModal" class="absolute inset-0 z-[110] hidden items-center justify-center bg-black/80 backdrop-blur-md transition-opacity duration-500">
+        <div class="bg-gray-900 p-8 rounded-3xl w-11/12 max-w-md text-center border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.8)] relative animate-slide-in overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-neon-cyan to-blue-500"></div>
+            <button onclick="closeAboutModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white transition w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="w-16 h-16 mx-auto bg-blue-500/20 rounded-2xl flex items-center justify-center mb-4 mt-2 border border-blue-500/30">
+                <i class="fas fa-paint-brush text-3xl text-neon-cyan"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-white mb-3">Art-Battle <span class="text-neon-cyan">Multiplayer</span></h2>
+            <p class="text-gray-400 mb-4 text-sm leading-relaxed">
+                A premium real-time multiplayer drawing experience. Play with your friends, draw amazing sketches, and earn points from our AI judge!
+            </p>
+            <div class="bg-black/50 rounded-xl p-4 mb-4 border border-white/5 text-left">
+                <p class="text-xs text-gray-300 mb-2"><i class="fas fa-check text-green-400 mr-2"></i> Real-time Multiplayer Socket</p>
+                <p class="text-xs text-gray-300 mb-2"><i class="fas fa-check text-green-400 mr-2"></i> AI Drawing Comparison</p>
+                <p class="text-xs text-gray-300"><i class="fas fa-check text-green-400 mr-2"></i> Global Lobby System</p>
+            </div>
+            <p class="text-neon-cyan font-bold text-xs uppercase tracking-widest mt-2">Version 4.0 | Pro Edition</p>
+        </div>
+    </div>
+
+    <!-- ==================== AUTHENTICATION SCREENS ==================== -->
+    <div id="authScreen" class="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-[#01012b]/95 backdrop-blur-xl transition-opacity duration-500">
+        <div class="bg-gray-900/80 p-8 rounded-[2rem] max-w-md w-11/12 border border-white/10 shadow-2xl relative overflow-hidden">
+            <!-- Decorative blur -->
+            <div class="absolute -top-20 -right-20 w-40 h-40 bg-neon-cyan/20 blur-3xl rounded-full pointer-events-none"></div>
+            <div class="absolute -bottom-20 -left-20 w-40 h-40 bg-neon-pink/20 blur-3xl rounded-full pointer-events-none"></div>
+
+            <div class="text-center mb-8 relative z-10">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/5 border border-white/10 mb-4 shadow-lg">
+                    <i class="fas fa-gamepad text-3xl text-neon-cyan"></i>
+                </div>
+                <h1 class="font-display text-4xl text-transparent bg-clip-text bg-gradient-to-r from-neon-cyan to-neon-pink">AI Art Battle</h1>
+                <p class="text-gray-400 text-sm mt-2 font-medium">Log in to your creative journey</p>
+            </div>
+            
+            <div id="authError" class="hidden bg-red-500/10 border border-red-500/50 text-red-400 p-3 rounded-xl mb-4 text-sm text-center font-medium backdrop-blur-sm relative z-10"></div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="flex flex-col gap-4 relative z-10">
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><i class="fas fa-envelope text-gray-500"></i></div>
+                    <input type="email" id="loginEmail" placeholder="Email ID" required class="w-full bg-black/40 border border-white/10 rounded-2xl pl-11 pr-4 py-4 text-white focus:outline-none focus:border-neon-cyan focus:bg-black/60 transition-all shadow-inner">
+                </div>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><i class="fas fa-lock text-gray-500"></i></div>
+                    <input type="password" id="loginPassword" placeholder="Password" required class="w-full bg-black/40 border border-white/10 rounded-2xl pl-11 pr-4 py-4 text-white focus:outline-none focus:border-neon-cyan focus:bg-black/60 transition-all shadow-inner">
+                </div>
+                <button type="submit" class="w-full bg-gradient-to-r from-neon-cyan to-blue-500 hover:from-blue-400 hover:to-neon-cyan text-black font-bold py-4 rounded-2xl shadow-[0_10px_20px_-10px_rgba(5,217,232,0.6)] transition-all transform hover:-translate-y-1 mt-2 text-lg">Play Now</button>
+                <div class="flex justify-between text-sm text-gray-400 mt-4 px-2 font-medium">
+                    <button type="button" onclick="switchAuth('forgot')" class="hover:text-white transition">Forgot Password?</button>
+                    <button type="button" onclick="switchAuth('signup')" class="text-neon-cyan hover:text-cyan-300 transition">Create Account</button>
+                </div>
+            </form>
+
+            <!-- Signup Form -->
+            <form id="signupForm" class="hidden flex flex-col gap-4 relative z-10">
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><i class="fas fa-user text-gray-500"></i></div>
+                    <input type="text" id="signupUsername" placeholder="Player Name (Username)" required class="w-full bg-black/40 border border-white/10 rounded-2xl pl-11 pr-4 py-4 text-white focus:outline-none focus:border-neon-pink focus:bg-black/60 transition-all shadow-inner">
+                </div>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><i class="fas fa-envelope text-gray-500"></i></div>
+                    <input type="email" id="signupEmail" placeholder="Email ID" required class="w-full bg-black/40 border border-white/10 rounded-2xl pl-11 pr-4 py-4 text-white focus:outline-none focus:border-neon-pink focus:bg-black/60 transition-all shadow-inner">
+                </div>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><i class="fas fa-lock text-gray-500"></i></div>
+                    <input type="password" id="signupPassword" placeholder="Password" required class="w-full bg-black/40 border border-white/10 rounded-2xl pl-11 pr-4 py-4 text-white focus:outline-none focus:border-neon-pink focus:bg-black/60 transition-all shadow-inner">
+                </div>
+                <button type="submit" class="w-full bg-gradient-to-r from-neon-pink to-purple-600 hover:from-purple-500 hover:to-neon-pink text-white font-bold py-4 rounded-2xl shadow-[0_10px_20px_-10px_rgba(255,42,109,0.6)] transition-all transform hover:-translate-y-1 mt-2 text-lg">Sign Up</button>
+                <div class="text-center text-sm text-gray-400 mt-4 font-medium">
+                    Already have an account? <button type="button" onclick="switchAuth('login')" class="text-white hover:text-neon-cyan transition font-bold ml-1">Login</button>
+                </div>
+            </form>
+
+            <!-- Forgot Password Form -->
+            <form id="forgotForm" class="hidden flex flex-col gap-4 relative z-10">
+                <div class="w-16 h-16 mx-auto bg-yellow-500/10 rounded-full flex items-center justify-center mb-2">
+                    <i class="fas fa-key text-2xl text-yellow-500"></i>
+                </div>
+                <p class="text-gray-300 text-sm text-center mb-4 font-medium">Enter your registered email, we will send a password reset link.</p>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><i class="fas fa-envelope text-gray-500"></i></div>
+                    <input type="email" id="forgotEmail" placeholder="Email ID" required class="w-full bg-black/40 border border-white/10 rounded-2xl pl-11 pr-4 py-4 text-white focus:outline-none focus:border-yellow-400 focus:bg-black/60 transition-all shadow-inner">
+                </div>
+                <button type="submit" class="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-4 rounded-2xl shadow-[0_10px_20px_-10px_rgba(234,179,8,0.6)] transition-all transform hover:-translate-y-1 mt-2 text-lg">Reset Password</button>
+                <div class="text-center text-sm mt-4">
+                    <button type="button" onclick="switchAuth('login')" class="text-gray-400 hover:text-white transition font-medium flex items-center justify-center w-full gap-2"><i class="fas fa-arrow-left"></i> Back to Login</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Privacy Policy Link -->
+        <div class="mt-8 text-center relative z-10">
+            <button onclick="showPrivacyPolicy()" class="text-gray-500 hover:text-white text-xs font-medium transition-colors border-b border-gray-600 hover:border-white pb-0.5">Read Privacy Policy</button>
+        </div>
+    </div>
+    <!-- ==================== END AUTH ==================== -->
+
+    <!-- ==================== PROFESSIONAL APP LOBBY SCREEN ==================== -->
+    <div id="lobbyScreen" class="absolute inset-0 z-[90] hidden bg-[#01012b]/95 backdrop-blur-xl overflow-y-auto">
+        <!-- Main App Container -->
+        <div class="max-w-6xl mx-auto w-full min-h-screen flex flex-col p-4 md:p-8 pt-8">
+            
+            <!-- Custom App Header -->
+            <header class="flex justify-between items-center mb-8 relative z-20">
+                <div class="flex items-center gap-4">
+                    <!-- Avatar -->
+                    <div class="relative">
+                        <div class="w-14 h-14 rounded-full bg-gradient-to-br from-neon-cyan to-blue-600 p-1 shadow-lg">
+                            <div class="w-full h-full bg-gray-900 rounded-full flex items-center justify-center text-xl font-bold border-2 border-transparent">
+                                <span id="lobbyAvatarInitial" class="text-white">U</span>
+                            </div>
+                        </div>
+                        <div class="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-[#01012b] rounded-full shadow-sm"></div>
+                    </div>
+                    <!-- Greeting -->
+                    <div>
+                        <p class="text-xs text-gray-400 font-semibold tracking-wider uppercase mb-0.5">Welcome,</p>
+                        <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                            <span id="lobbyUserName" class="text-transparent bg-clip-text bg-gradient-to-r from-neon-cyan to-white">Player</span>
+                            <button onclick="changeUsername()" class="text-xs bg-white/10 hover:bg-white/20 text-gray-300 p-1.5 rounded-lg transition-colors backdrop-blur-sm shadow-sm" title="Change Name">
+                                <i class="fas fa-pen"></i>
+                            </button>
+                        </h2>
+                    </div>
+                </div>
+
+                <!-- 3-Dot Menu Dropdown -->
+                <div class="relative">
+                    <button onclick="toggleMenu()" class="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white transition-all backdrop-blur-sm shadow-lg">
+                        <i class="fas fa-ellipsis-v text-lg"></i>
+                    </button>
+                    <!-- Dropdown Content -->
+                    <div id="lobbyMenu" class="hidden absolute right-0 mt-3 w-56 bg-gray-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden transform origin-top-right transition-all z-30">
+                        <button onclick="openAboutModal()" class="w-full text-left px-5 py-4 text-gray-200 hover:bg-white/5 hover:text-neon-cyan transition flex items-center border-b border-white/5 font-medium">
+                            <i class="fas fa-info-circle mr-3 text-lg w-5 text-center"></i> About Us
+                        </button>
+                        <button onclick="logout()" class="w-full text-left px-5 py-4 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition flex items-center font-medium">
+                            <i class="fas fa-sign-out-alt mr-3 text-lg w-5 text-center"></i> Logout
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+                
+                <!-- Left Column (Actions & History) -->
+                <div class="lg:col-span-7 xl:col-span-8 flex flex-col gap-6">
+                    
+                    <!-- Hero Action Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- Play Now Card -->
+                        <button onclick="startGameFromLobby()" class="relative overflow-hidden group bg-gradient-to-br from-neon-pink to-purple-600 rounded-[2rem] p-6 sm:p-8 text-left shadow-[0_10px_40px_-10px_rgba(255,42,109,0.5)] hover:shadow-[0_15px_50px_-10px_rgba(255,42,109,0.7)] transition-all duration-300 transform hover:-translate-y-1 border border-white/10">
+                            <!-- Shine effect -->
+                            <div class="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                            
+                            <i class="fas fa-paint-brush text-4xl sm:text-5xl text-white/90 mb-5 drop-shadow-md"></i>
+                            <h3 class="text-2xl sm:text-3xl font-display text-white mb-2">New Game</h3>
+                            <p class="text-white/80 text-sm font-medium">Create a game and invite friends</p>
+                            
+                            <div class="absolute bottom-6 right-6 w-12 h-12 bg-white/20 rounded-full flex items-center justify-center group-hover:translate-x-2 transition-transform shadow-sm">
+                                <i class="fas fa-arrow-right text-white text-lg"></i>
+                            </div>
+                        </button>
+
+                        <!-- Join Code Card -->
+                        <button onclick="customAlert('Join code feature is coming soon!')" class="relative overflow-hidden group bg-gray-800/80 backdrop-blur-xl rounded-[2rem] p-6 sm:p-8 text-left border border-white/10 hover:border-neon-cyan/50 hover:bg-gray-800 shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                            <i class="fas fa-sign-in-alt text-4xl sm:text-5xl text-neon-cyan mb-5 drop-shadow-[0_0_10px_rgba(5,217,232,0.5)]"></i>
+                            <h3 class="text-2xl sm:text-3xl font-display text-white mb-2">Join Code</h3>
+                            <p class="text-gray-400 text-sm font-medium">Join your friend's room</p>
+                            <div class="absolute bottom-6 right-6 w-12 h-12 bg-white/5 rounded-full flex items-center justify-center group-hover:bg-neon-cyan/20 transition-colors">
+                                <i class="fas fa-key text-neon-cyan"></i>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- History Section -->
+                    <div class="bg-gray-800/50 backdrop-blur-xl rounded-[2rem] p-6 border border-white/5 flex-1 flex flex-col min-h-[300px] shadow-lg">
+                        <div class="flex justify-between items-center mb-6 px-2">
+                            <h3 class="text-xl font-bold text-white flex items-center gap-3">
+                                <div class="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 shadow-inner"><i class="fas fa-history"></i></div> Match History
+                            </h3>
+                            <span class="text-xs font-semibold px-4 py-1.5 bg-white/5 rounded-full text-gray-400 border border-white/10">Recent</span>
+                        </div>
+                        <div id="historyList" class="space-y-3 overflow-y-auto pr-2 flex-1">
+                            <!-- History Items injected by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column (Friends) -->
+                <div class="lg:col-span-5 xl:col-span-4 flex flex-col">
+                    <div class="bg-gray-800/50 backdrop-blur-xl rounded-[2rem] p-6 border border-white/5 flex-1 flex flex-col h-[500px] lg:h-auto shadow-lg relative overflow-hidden">
+                        
+                        <!-- Header -->
+                        <div class="flex justify-between items-center mb-6 px-2 relative z-10">
+                            <h3 class="text-xl font-bold text-white flex items-center gap-3">
+                                <div class="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400 shadow-inner"><i class="fas fa-users"></i></div> Online Friends
+                            </h3>
+                            <!-- Ping Indicator -->
+                            <div class="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
+                                <span class="relative flex h-2.5 w-2.5">
+                                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                                </span>
+                                <span class="text-xs font-bold text-gray-300" id="onlineCountBadge">Live</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Premium Search Bar -->
+                        <div class="relative mb-6 z-10">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <i class="fas fa-search text-gray-400"></i>
+                            </div>
+                            <input type="text" id="searchFriendInput" placeholder="Search players..." class="w-full bg-black/40 border border-white/10 rounded-2xl pl-11 pr-4 py-4 text-sm text-white placeholder-gray-500 focus:border-neon-cyan focus:bg-black/60 outline-none transition-all shadow-inner font-medium" onkeyup="searchFriends()">
+                        </div>
+
+                        <!-- Friends List -->
+                        <div id="friendsList" class="space-y-3 overflow-y-auto pr-2 flex-1 z-10">
+                            <!-- Friends injected by JS -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    <!-- ==================== END LOBBY ==================== -->
+
+    <!-- OVERLAY: Custom Word Selection Screen -->
+    <div id="wordSelectionScreen" class="absolute inset-0 z-40 hidden items-center justify-center bg-black/80 backdrop-blur-md transition-opacity duration-500">
+        <div class="bg-gray-900 p-10 rounded-[2.5rem] w-11/12 max-w-lg text-center border-t-4 border-neon-cyan shadow-[0_0_50px_rgba(5,217,232,0.2)] animate-slide-in relative overflow-hidden">
+            <h2 class="text-4xl font-display text-white mb-2">Round <span id="nextRoundNum" class="text-neon-cyan">1</span></h2>
+            <p class="text-gray-400 mb-8 font-medium">What do you want everyone to draw? (Type your own)</p>
+            
+            <div class="flex flex-col gap-5">
+                <input type="text" id="customWordInput" placeholder="e.g., Elephant, Laptop..." 
+                    class="w-full bg-black/50 border border-white/20 rounded-2xl px-6 py-5 text-white placeholder-gray-500 focus:outline-none focus:border-neon-pink focus:bg-black/80 text-center text-2xl font-bold transition-all shadow-inner uppercase tracking-wider">
+                
+                <button onclick="startNewRound()" class="bg-gradient-to-r from-neon-pink to-red-600 hover:from-red-500 hover:to-neon-pink text-white font-bold py-5 rounded-2xl transition-all hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(255,42,109,0.5)] text-xl tracking-widest mt-2">
+                    START DRAWING <i class="fas fa-pencil-alt ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- OVERLAY: AI Judging Screen -->
+    <div id="judgingScreen" class="absolute inset-0 z-40 hidden flex-col items-center justify-center bg-black/95 backdrop-blur-xl transition-opacity duration-500">
+        <h2 class="text-2xl md:text-4xl font-display text-neon-cyan animate-pulse tracking-wider text-center px-4 mb-8" id="judgingText">AI Analysis in Progress...</h2>
+        <div class="flex flex-col md:flex-row gap-6 md:gap-10 items-center justify-center">
+            <!-- User Drawing -->
+            <div class="flex flex-col items-center">
+                <div class="relative w-48 h-48 md:w-64 md:h-64 border-4 border-neon-cyan rounded-3xl overflow-hidden shadow-[0_0_40px_rgba(5,217,232,0.4)] bg-white p-2">
+                    <div class="absolute w-full h-1.5 bg-neon-cyan shadow-[0_0_20px_#05d9e8] animate-scan z-10 left-0"></div>
+                    <img id="judgingImage" src="" class="w-full h-full object-contain opacity-90 rounded-2xl">
+                </div>
+                <span class="mt-4 text-neon-cyan font-bold tracking-widest text-xs md:text-sm bg-neon-cyan/10 px-4 py-1 rounded-full border border-neon-cyan/30">YOUR DRAWING</span>
+            </div>
+            
+            <!-- VS Text -->
+            <div class="text-3xl md:text-5xl font-display text-neon-pink drop-shadow-[0_0_15px_rgba(255,42,109,0.8)] z-10">VS</div>
+
+            <!-- AI Real Image -->
+            <div class="flex flex-col items-center">
+                <div class="relative w-48 h-48 md:w-64 md:h-64 border-4 border-neon-pink rounded-3xl overflow-hidden shadow-[0_0_40px_rgba(255,42,109,0.4)] bg-black p-2">
+                    <div class="absolute w-full h-1.5 bg-neon-pink shadow-[0_0_20px_#ff2a6d] animate-scan z-10 left-0"></div>
+                    <img id="aiTargetImage" src="" class="w-full h-full object-cover rounded-2xl">
+                </div>
+                <span class="mt-4 text-neon-pink font-bold tracking-widest text-xs md:text-sm bg-neon-pink/10 px-4 py-1 rounded-full border border-neon-pink/30">REAL IMAGE (AI)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- OVERLAY: Winner/Loser (Single Round) Screen -->
+    <div id="winnerScreen" class="absolute inset-0 z-50 hidden flex-col items-center justify-center bg-black/90 backdrop-blur-xl transition-opacity duration-500 overflow-y-auto py-8">
+        <div class="bg-gray-900 p-8 md:p-12 rounded-[3rem] text-center border-t-4 border-gray-400 shadow-[0_0_50px_rgba(0,0,0,0.8)] transform scale-100 animate-slide-in w-11/12 max-w-3xl relative overflow-hidden my-auto" id="winnerPanel">
+            <!-- Glow effect behind trophy -->
+            <div class="absolute top-10 left-1/2 -translate-x-1/2 w-32 h-32 bg-yellow-500/20 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div id="iconContainer" class="mb-4 animate-bounce-slow relative z-10">
+                <i class="fas fa-trophy text-5xl md:text-7xl text-yellow-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.6)]" id="resultIcon"></i>
+            </div>
+            <h2 class="text-3xl md:text-5xl font-display mb-2 tracking-wide" id="winnerTitle">CONGRATULATIONS!</h2>
+            <p class="text-base md:text-xl text-gray-300 mb-8 font-medium" id="winnerText">AI found your drawing 95% perfect!</p>
+            
+            <!-- Side by Side Comparison -->
+            <div class="flex flex-col sm:flex-row justify-center items-center gap-6 md:gap-12 mb-8 relative z-10">
+                <div class="flex flex-col items-center">
+                    <div class="w-32 h-32 md:w-48 md:h-48 border-4 rounded-2xl overflow-hidden shadow-2xl bg-white p-2" id="winnerImageFrame">
+                        <img id="winnerImage" src="" class="w-full h-full object-contain rounded-xl">
+                    </div>
+                    <span id="winnerImageLabel" class="mt-3 text-xs md:text-sm font-bold text-gray-300">Winning Drawing</span>
+                </div>
+                
+                <div class="text-2xl md:text-4xl font-display text-gray-500 hidden sm:block">=</div>
+                
+                <div class="flex flex-col items-center">
+                    <div class="w-32 h-32 md:w-48 md:h-48 border-4 border-neon-pink/50 rounded-2xl overflow-hidden shadow-2xl bg-black p-2">
+                        <img id="winnerTargetImage" src="" class="w-full h-full object-cover rounded-xl">
+                    </div>
+                    <span class="mt-3 text-xs md:text-sm font-bold text-neon-pink">AI Reference</span>
+                </div>
+            </div>
+            
+            <div class="inline-block bg-black/50 px-6 py-3 rounded-full border border-white/10 relative z-10">
+                <p class="text-white text-sm font-bold" id="winnerSubText">You made the best drawing.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- OVERLAY: Final Khel Khatam (Game Over) Screen -->
+    <div id="finalScreen" class="absolute inset-0 z-[60] hidden flex-col items-center justify-center bg-[#01012b]/95 backdrop-blur-2xl transition-opacity duration-500">
+        <div class="bg-gray-900 p-10 rounded-[3rem] text-center border-t-4 border-yellow-400 shadow-[0_20px_60px_rgba(251,191,36,0.3)] transform scale-100 animate-slide-in w-11/12 max-w-lg relative overflow-hidden">
+            <div class="absolute -top-20 -right-20 w-40 h-40 bg-yellow-500/20 blur-3xl rounded-full"></div>
+            
+            <i class="fas fa-crown text-7xl text-yellow-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.8)] mb-6 animate-bounce-slow relative z-10"></i>
+            <h2 class="text-5xl font-display text-white mb-2 relative z-10">GAME OVER!</h2>
+            <p class="text-2xl text-neon-cyan mb-8 font-bold relative z-10" id="finalWinnerText">You Won the Game!</p>
+            
+            <div class="bg-black/40 rounded-3xl p-6 mb-8 border border-white/5 relative z-10">
+                <h3 class="text-neon-pink font-bold mb-5 flex items-center justify-center gap-2 text-lg"><i class="fas fa-list-ol"></i> FINAL LEADERBOARD</h3>
+                <div id="finalLeaderboardList" class="space-y-3">
+                    <!-- Final scores injected here -->
+                </div>
+            </div>
+
+            <button onclick="restartGame()" class="relative z-10 w-full bg-gradient-to-r from-neon-cyan to-blue-600 text-black font-bold py-5 rounded-2xl shadow-[0_10px_20px_-10px_rgba(5,217,232,0.6)] hover:-translate-y-1 transition-transform text-lg flex items-center justify-center gap-3">
+                <i class="fas fa-home text-xl"></i> Return to Lobby
+            </button>
+        </div>
+    </div>
+
+    <!-- OVERLAY: Private Chat Modal -->
+    <div id="privateChatModal" class="absolute inset-0 z-[120] hidden items-center justify-center bg-black/80 backdrop-blur-md transition-opacity duration-300">
+        <div class="bg-gray-900 w-11/12 max-w-md h-[500px] sm:h-[600px] rounded-[2rem] flex flex-col border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.8)] relative animate-slide-in overflow-hidden">
+            <!-- Header -->
+            <div class="bg-black/50 px-6 py-4 border-b border-white/5 flex justify-between items-center relative z-10">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-neon-cyan to-blue-500 flex items-center justify-center text-white font-bold shadow-lg" id="pcAvatar">F</div>
+                    <div>
+                        <h3 class="font-bold text-white text-lg leading-tight" id="pcName">Friend Name</h3>
+                        <p class="text-[10px] text-green-400 font-medium">Online</p>
+                    </div>
+                </div>
+                <!-- Delete & Close Actions -->
+                <div class="flex items-center gap-2">
+                    <button onclick="clearPrivateChat()" class="w-8 h-8 rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 flex items-center justify-center transition-colors border border-red-500/20" title="Delete Chat">
+                        <i class="fas fa-trash-alt text-sm"></i>
+                    </button>
+                    <button onclick="closePrivateChat()" class="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Messages -->
+            <div id="pcMessages" class="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar bg-gray-900/50">
+                <!-- Messages injected by JS -->
+            </div>
+            
+            <!-- Input -->
+            <form id="pcForm" class="p-4 bg-black/60 border-t border-white/5 flex gap-2 relative z-10">
+                <input type="text" id="pcInput" placeholder="Type a message..." autocomplete="off"
+                    class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan focus:bg-white/10 transition-colors text-sm font-medium">
+                <button type="submit" class="w-12 h-12 bg-neon-cyan hover:bg-cyan-400 rounded-2xl text-black flex items-center justify-center shadow-[0_5px_15px_rgba(5,217,232,0.3)] transition-transform hover:-translate-y-0.5">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== MAIN GAME APP WRAPPER ==================== -->
+    <div id="mainGameArea" class="hidden flex-col h-full w-full p-2 lg:p-4 gap-2 lg:gap-4 relative z-10 max-w-7xl mx-auto">
+        
+        <!-- HEADER ROW -->
+        <header class="bg-gray-900/80 backdrop-blur-xl border border-white/10 rounded-3xl p-3 lg:p-4 flex justify-between items-center shrink-0 shadow-lg">
+            <div class="flex items-center gap-3 lg:gap-5">
+                <button onclick="leaveGamePrompt()" class="w-10 h-10 lg:w-auto lg:px-4 lg:py-2 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl border border-red-500/20 transition-colors font-bold group">
+                    <i class="fas fa-arrow-left group-hover:-translate-x-1 transition-transform"></i> <span class="hidden lg:inline ml-2">Leave</span>
+                </button>
+                <div class="bg-black/60 px-4 py-2 rounded-xl text-xs md:text-sm font-bold text-gray-300 border border-white/5 shadow-inner" id="roundIndicator">Round 1/3</div>
+            </div>
+
+            <!-- Target Word -->
+            <div class="flex-1 flex justify-center text-center mx-2">
+                <div class="bg-black/40 px-6 py-2 md:py-3 rounded-2xl border border-neon-pink/50 shadow-[0_0_15px_rgba(255,42,109,0.15)] flex flex-col items-center justify-center min-w-[150px] md:min-w-[250px]">
+                    <span class="text-neon-pink text-[9px] md:text-xs uppercase tracking-widest font-bold mb-0.5 opacity-90">EVERYONE HAS TO DRAW</span>
+                    <span class="text-lg md:text-2xl lg:text-3xl font-display tracking-widest text-white drop-shadow-md uppercase leading-none" id="wordToDraw">WORD</span>
+                </div>
+            </div>
+
+            <!-- Timer -->
+            <div class="flex items-center">
+                <div class="relative w-12 h-12 md:w-14 md:h-14 flex items-center justify-center bg-gray-900 rounded-full border-4 border-neon-cyan shadow-[0_0_15px_rgba(5,217,232,0.4)]">
+                    <span id="timer" class="font-display text-xl md:text-2xl text-white">60</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- GAME AREA -->
+        <div class="flex flex-col lg:flex-row flex-1 gap-2 lg:gap-4 min-h-0">
+            
+            <!-- LEFT: Leaderboard -->
+            <aside class="bg-gray-900/80 backdrop-blur-xl border border-white/10 rounded-3xl w-full lg:w-64 flex flex-col overflow-hidden shrink-0 hidden lg:flex shadow-lg">
+                <div class="bg-black/50 p-4 text-center border-b border-white/5 font-bold tracking-widest text-neon-cyan flex items-center justify-center gap-2">
+                    <i class="fas fa-trophy"></i> SCORE BOARD
+                </div>
+                <div class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar" id="leaderboard">
+                    <!-- Players injected via JS -->
+                </div>
+            </aside>
+
+            <!-- CENTER: Canvas Area -->
+            <main class="flex-1 flex flex-col bg-gray-900/80 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden relative shadow-lg">
+                <div class="flex-1 w-full relative bg-gray-800 overflow-hidden rounded-t-3xl flex items-center justify-center p-2 lg:p-4" id="canvasContainer">
+                    <canvas id="gameCanvas" class="bg-white rounded-2xl shadow-xl max-w-full max-h-full cursor-crosshair touch-none"></canvas>
+                </div>
+
+                <!-- Responsive Tools Toolbar -->
+                <div class="bg-black/80 p-3 md:p-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/5">
+                    
+                    <!-- Colors Palette -->
+                    <div class="flex gap-2 md:gap-3 bg-white/5 p-2 rounded-2xl overflow-x-auto custom-scrollbar flex-1 md:flex-none justify-start" id="colorPalette"></div>
+
+                    <!-- Brush Size -->
+                    <div class="flex items-center gap-2 bg-white/5 p-2 rounded-2xl px-4 flex-1 justify-center md:flex-none border border-white/5">
+                        <i class="fas fa-paint-brush text-gray-400 text-xs hidden sm:block"></i>
+                        <input type="range" id="brushSize" min="2" max="30" value="5" class="w-full sm:w-24 lg:w-32 accent-neon-pink cursor-pointer">
+                        <div id="brushSizeDisplay" class="w-4 h-4 bg-black border-2 border-white rounded-full ml-2 shrink-0 transition-transform" style="transform: scale(0.5);"></div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex gap-2 shrink-0">
+                        <button onclick="setEraser()" class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors border border-white/10 shadow-sm" title="Eraser">
+                            <i class="fas fa-eraser text-gray-200"></i>
+                        </button>
+                        <button onclick="clearCanvas()" class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-500 flex items-center justify-center transition-colors border border-red-500/20 shadow-sm" title="Clear Canvas">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </main>
+
+            <!-- RIGHT: Chat Area -->
+            <aside class="bg-gray-900/80 backdrop-blur-xl border border-white/10 rounded-3xl w-full lg:w-80 flex flex-col shrink-0 h-56 lg:h-auto shadow-lg">
+                <div class="bg-black/50 p-4 text-center border-b border-white/5 font-bold tracking-widest text-neon-pink flex items-center justify-center gap-2">
+                    <i class="fas fa-comments"></i> LIVE CHAT
+                </div>
+                
+                <div class="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col custom-scrollbar" id="chatBox">
+                    <div class="text-center text-xs font-semibold text-neon-cyan/70 my-2 bg-neon-cyan/10 py-1 rounded-full w-3/4 mx-auto">Game has started!</div>
+                </div>
+
+                <form id="chatForm" class="p-3 bg-black/60 border-t border-white/5 flex gap-2 rounded-b-3xl">
+                    <input type="text" id="chatInput" placeholder="Guess here..." autocomplete="off"
+                        class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan focus:bg-white/10 transition-colors font-medium text-sm">
+                    <button type="submit" class="w-12 h-12 bg-neon-cyan hover:bg-cyan-400 rounded-2xl text-black flex items-center justify-center shadow-[0_5px_15px_rgba(5,217,232,0.3)] transition-transform hover:-translate-y-0.5 active:translate-y-0">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </form>
+            </aside>
+        </div>
+    </div>
+
+    <script>
+        // --- Custom Modal System (Professional UI) ---
+        function customAlert(message) {
+            return new Promise((resolve) => {
+                const dialog = document.getElementById('customDialog');
+                document.getElementById('dialogTitle').innerText = 'Notice';
+                document.getElementById('dialogMessage').innerText = message;
+                document.getElementById('dialogInput').classList.add('hidden');
+                document.getElementById('dialogCancel').classList.add('hidden');
+                
+                const confirmBtn = document.getElementById('dialogConfirm');
+                confirmBtn.innerText = 'OK';
+                confirmBtn.className = "flex-1 px-4 py-3.5 bg-neon-cyan hover:bg-cyan-400 text-black font-bold rounded-xl shadow-[0_5px_15px_rgba(5,217,232,0.4)] transition transform hover:-translate-y-0.5";
+                
+                dialog.classList.remove('hidden');
+                dialog.classList.add('flex');
+                
+                confirmBtn.onclick = () => {
+                    dialog.classList.remove('flex');
+                    dialog.classList.add('hidden');
+                    resolve();
+                };
+            });
+        }
+
+        function customPrompt(message, defaultValue = '') {
+            return new Promise((resolve) => {
+                const dialog = document.getElementById('customDialog');
+                document.getElementById('dialogTitle').innerText = 'Change Name';
+                document.getElementById('dialogMessage').innerText = message;
+                
+                const input = document.getElementById('dialogInput');
+                input.value = defaultValue;
+                input.classList.remove('hidden');
+                input.placeholder = "e.g., ProGamer...";
+                
+                const cancelBtn = document.getElementById('dialogCancel');
+                cancelBtn.classList.remove('hidden');
+                cancelBtn.innerText = 'Cancel';
+                
+                const confirmBtn = document.getElementById('dialogConfirm');
+                confirmBtn.innerText = 'Save';
+                confirmBtn.className = "flex-1 px-4 py-3.5 bg-neon-pink hover:bg-pink-500 text-white font-bold rounded-xl shadow-[0_5px_15px_rgba(255,42,109,0.4)] transition transform hover:-translate-y-0.5";
+                
+                dialog.classList.remove('hidden');
+                dialog.classList.add('flex');
+                input.focus();
+                
+                cancelBtn.onclick = () => {
+                    dialog.classList.remove('flex');
+                    dialog.classList.add('hidden');
+                    resolve(null);
+                };
+                
+                confirmBtn.onclick = () => {
+                    dialog.classList.remove('flex');
+                    dialog.classList.add('hidden');
+                    resolve(input.value);
+                };
+            });
+        }
+
+        function customConfirm(message) {
+            return new Promise((resolve) => {
+                const dialog = document.getElementById('customDialog');
+                document.getElementById('dialogTitle').innerText = 'Notice';
+                document.getElementById('dialogMessage').innerText = message;
+                document.getElementById('dialogInput').classList.add('hidden');
+                
+                const cancelBtn = document.getElementById('dialogCancel');
+                cancelBtn.classList.remove('hidden');
+                cancelBtn.innerText = "No";
+                
+                const confirmBtn = document.getElementById('dialogConfirm');
+                confirmBtn.innerText = 'Yes, Leave';
+                confirmBtn.className = "flex-1 px-4 py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl shadow-[0_5px_15px_rgba(239,68,68,0.4)] transition transform hover:-translate-y-0.5";
+                
+                dialog.classList.remove('hidden');
+                dialog.classList.add('flex');
+                
+                cancelBtn.onclick = () => {
+                    dialog.classList.remove('flex');
+                    dialog.classList.add('hidden');
+                    resolve(false);
+                };
+                
+                confirmBtn.onclick = () => {
+                    dialog.classList.remove('flex');
+                    dialog.classList.add('hidden');
+                    resolve(true);
+                };
+            });
+        }
+
+        // --- API & SOCKET CONFIG ---
+        const API_BASE_URL = 'http://localhost:3000';
+        let socket;
+        try {
+            socket = io(API_BASE_URL);
+        } catch(e) {
+            console.warn("Socket.io connection failed for Demo mode.");
+            socket = { emit: ()=>{}, on: ()=>{}, id: 'fake_id_123' };
+        }
+
+        // --- GAME & USER STATE ---
+        let myName = "Player";
+        let isDrawingMode = false;
+        let targetWord = ""; 
+        let roundCount = 1;
+        const totalRounds = 3;
+        
+        let players = [
+            { id: socket.id || 1, name: "You", score: 0, color: "border-neon-cyan", isMe: true },
+            { id: 2, name: "Raju_Pro", score: 0, color: "border-purple-500", isMe: false },
+            { id: 3, name: "Priya", score: 0, color: "border-pink-500", isMe: false }
+        ];
+
+        // Persistent Storage
+        let gameHistory = JSON.parse(localStorage.getItem('chitraKalaHistory')) || [
+            { date: "Today, 10:30 AM", word: "Lion", score: 250, rank: "1st" },
+            { date: "Yesterday, 4:15 PM", word: "Mountain", score: 120, rank: "3rd" }
+        ];
+        
+        const onlineFriends = [
+            { name: "Priya", status: "Playing (In Game)", isOnline: true },
+            { name: "Rahul_99", status: "In Lobby", isOnline: true },
+            { name: "Neha", status: "Offline", isOnline: false },
+            { name: "Raju_Pro", status: "In Lobby", isOnline: true }
+        ];
+
+        // ==================== AUTO-LOGIN ON PAGE LOAD ====================
+        window.onload = async () => {
+            const savedToken = localStorage.getItem('chatToken');
+            let savedUser = localStorage.getItem('chatUser');
+            
+            if(savedToken && savedUser) {
+                // Verify valid username
+                if(savedUser.includes('@')) {
+                    savedUser = await customPrompt("Invalid Username. Please enter a unique Player Name (Username):");
+                    if(!savedUser || savedUser.trim() === "" || savedUser.includes('@')) savedUser = "Player_" + Math.floor(Math.random()*1000);
+                    localStorage.setItem('chatUser', savedUser);
+                }
+
+                myName = savedUser;
+                players[0].name = myName + " (You)";
+                enterLobby();
+            }
+        };
+
+        function switchAuth(type) {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('signupForm').classList.add('hidden');
+            document.getElementById('forgotForm').classList.add('hidden');
+            document.getElementById('authError').classList.add('hidden');
+            document.getElementById(type + 'Form').classList.remove('hidden');
+        }
+
+        function showAuthError(msg) {
+            const errDiv = document.getElementById('authError');
+            errDiv.innerText = msg;
+            errDiv.classList.remove('hidden');
+        }
+
+        function showPrivacyPolicy() {
+            customAlert('Privacy Policy: We use your data strictly for gaming and chat features. Your safety is our priority. Enjoy gaming!');
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            
+            // Mock authentication bypassing backend for Demo
+            let storedName = localStorage.getItem('chatUser');
+            if(!storedName || storedName.includes('@')) {
+                storedName = await customPrompt("Username not found. Please enter a unique Player Name:");
+                if(!storedName || storedName.trim() === "" || storedName.includes('@')) storedName = "Ninja_" + Math.floor(Math.random()*1000);
+            }
+            
+            myName = storedName;
+            localStorage.setItem('chatToken', 'fake_demo_token_123');
+            localStorage.setItem('chatUser', myName);
+            players[0].name = myName + " (You)";
+            enterLobby();
+        });
+
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('signupUsername').value;
+            
+            if(username.includes('@')) {
+                showAuthError("Username should not contain @.");
+                return;
+            }
+
+            myName = username;
+            localStorage.setItem('chatToken', 'fake_demo_token_123');
+            localStorage.setItem('chatUser', myName);
+            players[0].name = myName + " (You)";
+            enterLobby();
+        });
+
+        document.getElementById('forgotForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('forgotEmail').value;
+            await customAlert(`Password reset link has been sent to ${email}! Check your inbox.`);
+            switchAuth('login');
+        });
+
+        function logout() {
+            localStorage.removeItem('chatToken');
+            location.reload(); 
+        }
+
+        // ==================== LOBBY MENU & MODALS ====================
+        function toggleMenu() {
+            const menu = document.getElementById('lobbyMenu');
+            menu.classList.toggle('hidden');
+        }
+
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('lobbyMenu');
+            const button = e.target.closest('button[onclick="toggleMenu()"]');
+            if(!button && menu && !menu.classList.contains('hidden')) {
+                menu.classList.add('hidden');
+            }
+        });
+
+        function openAboutModal() {
+            document.getElementById('lobbyMenu').classList.add('hidden');
+            document.getElementById('aboutModal').classList.remove('hidden');
+            document.getElementById('aboutModal').classList.add('flex');
+        }
+
+        function closeAboutModal() {
+            document.getElementById('aboutModal').classList.remove('flex');
+            document.getElementById('aboutModal').classList.add('hidden');
+        }
+
+        // ==================== LOBBY DASHBOARD LOGIC ====================
+        function enterLobby() {
+            document.getElementById('authScreen').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('authScreen').style.display = 'none';
+                
+                document.getElementById('lobbyUserName').innerText = myName;
+                document.getElementById('lobbyAvatarInitial').innerText = myName.charAt(0).toUpperCase();
+                
+                populateHistory();
+                populateFriends();
+                
+                document.getElementById('lobbyScreen').classList.remove('hidden');
+                document.getElementById('lobbyScreen').classList.add('flex');
+                
+                socket.emit('user-join', myName);
+            }, 500);
+        }
+
+        async function changeUsername() {
+            let newName = await customPrompt("Enter your new Player Name:", myName);
+            if(newName && newName.trim() !== "" && !newName.includes('@')) {
+                myName = newName.trim();
+                localStorage.setItem('chatUser', myName);
+                
+                document.getElementById('lobbyUserName').innerText = myName;
+                document.getElementById('lobbyAvatarInitial').innerText = myName.charAt(0).toUpperCase();
+                players[0].name = myName + " (You)";
+                
+                if(socket && socket.connected) {
+                    socket.emit('user-name-change', myName);
+                }
+            } else if (newName !== null) {
+                await customAlert("Please enter a valid name (Do not use email).");
+            }
+        }
+
+        function populateHistory() {
+            const list = document.getElementById('historyList');
+            list.innerHTML = '';
+            
+            if(gameHistory.length === 0) {
+                list.innerHTML = '<p class="text-center text-gray-500 text-sm mt-10">You haven\'t played any matches yet.</p>';
+                return;
+            }
+
+            gameHistory.forEach(match => {
+                let rankBadge = match.rank === "1st" ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" : (match.rank === "2nd" ? "bg-gray-300/20 text-gray-300 border border-gray-400/30" : "bg-orange-500/20 text-orange-400 border border-orange-500/30");
+                
+                list.innerHTML += `
+                    <div class="flex justify-between items-center bg-white/5 p-4 rounded-2xl hover:bg-white/10 transition-all border border-white/5">
+                        <div>
+                            <p class="text-base font-bold text-white">${match.word}</p>
+                            <p class="text-[11px] text-gray-400 mt-0.5">${match.date}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold mb-1 ${rankBadge}">${match.rank}</span>
+                            <p class="text-sm font-bold text-neon-cyan">${match.score} pts</p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function populateFriends() {
+            const list = document.getElementById('friendsList');
+            list.innerHTML = '';
+            
+            onlineFriends.forEach(friend => {
+                const isOnline = friend.isOnline;
+                const dotColor = isOnline ? (friend.status.includes('Game') ? 'bg-yellow-500' : 'bg-green-500') : 'bg-gray-600';
+                const opacity = isOnline ? 'opacity-100' : 'opacity-60 grayscale';
+                
+                list.innerHTML += `
+                    <div onclick="openPrivateChat('${friend.name}')" class="flex justify-between items-center bg-white/5 p-4 rounded-2xl transition-all border border-transparent ${opacity} hover:bg-white/10 cursor-pointer group">
+                        <div class="flex items-center gap-4">
+                            <div class="relative">
+                                <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-gray-600 to-gray-800 p-[2px]">
+                                    <div class="w-full h-full bg-gray-900 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-inner">
+                                        ${friend.name.charAt(0).toUpperCase()}
+                                    </div>
+                                </div>
+                                <div class="absolute bottom-0 right-0 w-3.5 h-3.5 ${dotColor} rounded-full border-2 border-gray-900 shadow-sm"></div>
+                            </div>
+                            <div>
+                                <p class="text-base font-bold text-white mb-0.5 group-hover:text-neon-cyan transition-colors">${friend.name}</p>
+                                <p class="text-[11px] font-medium ${isOnline ? 'text-neon-cyan' : 'text-gray-500'}">${friend.status}</p>
+                            </div>
+                        </div>
+                        <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 group-hover:bg-neon-cyan/20 group-hover:text-neon-cyan transition-colors">
+                            <i class="fas fa-comment-dots"></i>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function searchFriends() {
+            const input = document.getElementById('searchFriendInput').value.toLowerCase();
+            const list = document.getElementById('friendsList');
+            list.innerHTML = '';
+            
+            let foundCount = 0;
+            onlineFriends.forEach(friend => {
+                if (friend.name.toLowerCase().includes(input)) {
+                    foundCount++;
+                    const isOnline = friend.isOnline;
+                    const dotColor = isOnline ? (friend.status.includes('Game') ? 'bg-yellow-500' : 'bg-green-500') : 'bg-gray-600';
+                    const opacity = isOnline ? 'opacity-100' : 'opacity-60 grayscale';
+                    
+                    list.innerHTML += `
+                        <div onclick="openPrivateChat('${friend.name}')" class="flex justify-between items-center bg-white/5 p-4 rounded-2xl transition-all border border-transparent ${opacity} hover:bg-white/10 cursor-pointer group">
+                            <div class="flex items-center gap-4">
+                                <div class="relative">
+                                    <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-gray-600 to-gray-800 p-[2px]">
+                                        <div class="w-full h-full bg-gray-900 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-inner">
+                                            ${friend.name.charAt(0).toUpperCase()}
+                                        </div>
+                                    </div>
+                                    <div class="absolute bottom-0 right-0 w-3.5 h-3.5 ${dotColor} rounded-full border-2 border-gray-900 shadow-sm"></div>
+                                </div>
+                                <div>
+                                    <p class="text-base font-bold text-white mb-0.5 group-hover:text-neon-cyan transition-colors">${friend.name}</p>
+                                    <p class="text-[11px] font-medium ${isOnline ? 'text-neon-cyan' : 'text-gray-500'}">${friend.status}</p>
+                                </div>
+                            </div>
+                            <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 group-hover:bg-neon-cyan/20 group-hover:text-neon-cyan transition-colors">
+                                <i class="fas fa-comment-dots"></i>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+
+            if (foundCount === 0 && input.length > 0) {
+                list.innerHTML = `
+                    <div class="text-center text-sm text-gray-400 mt-6 p-6 border-2 border-dashed border-white/10 rounded-2xl bg-black/20">
+                        <i class="fas fa-user-slash text-3xl mb-3 opacity-50"></i><br>
+                        No player found named "${input}". <br> 
+                        <button onclick="addFriendMock('${input}')" class="mt-4 bg-neon-cyan text-black hover:bg-cyan-400 font-bold px-6 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(5,217,232,0.3)]">Send Friend Request</button>
+                    </div>
+                `;
+            } else if (input.length === 0) {
+                populateFriends();
+            }
+        }
+
+        async function addFriendMock(name) {
+            await customAlert(`Great! Friend request sent to ${name}.`);
+            document.getElementById('searchFriendInput').value = '';
+            populateFriends();
+        }
+
+        // ==================== PRIVATE CHAT LOGIC ====================
+        let currentChatFriend = "";
+
+        // Chat Data Management Functions
+        function getSavedChats() {
+            return JSON.parse(localStorage.getItem('chitraKalaChats')) || {};
+        }
+        
+        function saveChatMessage(friend, sender, text) {
+            const chats = getSavedChats();
+            if (!chats[friend]) chats[friend] = [];
+            chats[friend].push({ sender, text });
+            localStorage.setItem('chitraKalaChats', JSON.stringify(chats));
+        }
+
+        async function clearPrivateChat() {
+            if(!currentChatFriend) return;
+            const confirmed = await customConfirm(`Are you sure you want to delete your chat history with ${currentChatFriend}?`);
+            if(confirmed) {
+                const chats = getSavedChats();
+                delete chats[currentChatFriend];
+                localStorage.setItem('chitraKalaChats', JSON.stringify(chats));
+                
+                const msgContainer = document.getElementById('pcMessages');
+                msgContainer.innerHTML = `<div class="text-center text-xs text-gray-500 my-2 bg-black/20 py-1.5 rounded-full w-3/4 mx-auto border border-white/5">Chat history deleted.</div>`;
+            }
+        }
+
+        function openPrivateChat(friendName) {
+            currentChatFriend = friendName;
+            document.getElementById('pcName').innerText = friendName;
+            document.getElementById('pcAvatar').innerText = friendName.charAt(0).toUpperCase();
+            
+            const msgContainer = document.getElementById('pcMessages');
+            msgContainer.innerHTML = ''; // Clear container first
+            
+            // Load history from Local Storage
+            const chats = getSavedChats();
+            if (chats[friendName] && chats[friendName].length > 0) {
+                chats[friendName].forEach(msg => {
+                    if (msg.sender === 'me') {
+                        msgContainer.innerHTML += `
+                            <div class="flex justify-end animate-slide-in">
+                                <div class="bg-neon-cyan text-black px-4 py-2.5 rounded-2xl rounded-br-sm max-w-[80%] shadow-md font-medium text-sm">
+                                    ${msg.text}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        msgContainer.innerHTML += `
+                            <div class="flex justify-start animate-slide-in">
+                                <div class="bg-white/10 text-white border border-white/10 px-4 py-2.5 rounded-2xl rounded-bl-sm max-w-[80%] shadow-md font-medium text-sm">
+                                    ${msg.text}
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+            } else {
+                msgContainer.innerHTML = `<div class="text-center text-xs text-gray-500 my-2 bg-black/20 py-1.5 rounded-full w-3/4 mx-auto border border-white/5">This is the start of your conversation with ${friendName}.</div>`;
+            }
+            
+            document.getElementById('privateChatModal').classList.remove('hidden');
+            document.getElementById('privateChatModal').classList.add('flex');
+            
+            setTimeout(() => {
+                msgContainer.scrollTop = msgContainer.scrollHeight;
+                document.getElementById('pcInput').focus();
+            }, 100);
+        }
+
+        function closePrivateChat() {
+            document.getElementById('privateChatModal').classList.remove('flex');
+            document.getElementById('privateChatModal').classList.add('hidden');
+            currentChatFriend = "";
+        }
+
+        document.getElementById('pcForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const input = document.getElementById('pcInput');
+            const text = input.value.trim();
+            if(!text) return;
+
+            // Render my message
+            const msgContainer = document.getElementById('pcMessages');
+            msgContainer.innerHTML += `
+                <div class="flex justify-end animate-slide-in">
+                    <div class="bg-neon-cyan text-black px-4 py-2.5 rounded-2xl rounded-br-sm max-w-[80%] shadow-md font-medium text-sm">
+                        ${text}
+                    </div>
+                </div>
+            `;
+            
+            // Save my message to memory
+            saveChatMessage(currentChatFriend, 'me', text);
+            
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+            input.value = '';
+
+            // Simulate friend replying after 1.5 seconds
+            const replyText = "Hey! Let's play a game. 🎮";
+            const currentReplyFriend = currentChatFriend; // Save context
+            
+            setTimeout(() => {
+                if(currentReplyFriend) {
+                    // Save reply to memory
+                    saveChatMessage(currentReplyFriend, 'them', replyText);
+                }
+                
+                // Show reply only if chat is still open
+                if(currentChatFriend === currentReplyFriend && document.getElementById('privateChatModal').classList.contains('flex')) {
+                    msgContainer.innerHTML += `
+                        <div class="flex justify-start animate-slide-in">
+                            <div class="bg-white/10 text-white border border-white/10 px-4 py-2.5 rounded-2xl rounded-bl-sm max-w-[80%] shadow-md font-medium text-sm">
+                                ${replyText}
+                            </div>
+                        </div>
+                    `;
+                    msgContainer.scrollTop = msgContainer.scrollHeight;
+                }
+            }, 1500);
+        });
+
+        // ==================== GAME NAVIGATION LOGIC ====================
+        function startGameFromLobby() {
+            document.getElementById('lobbyScreen').classList.remove('flex');
+            document.getElementById('lobbyScreen').classList.add('hidden');
+            
+            document.getElementById('mainGameArea').classList.remove('hidden');
+            document.getElementById('mainGameArea').classList.add('flex');
+            
+            resizeCanvas();
+            updateLeaderboard();
+            showCustomWordScreen();
+        }
+
+        async function leaveGamePrompt() {
+            const confirmed = await customConfirm("Are you sure you want to leave the game and return to the lobby?");
+            if(confirmed) {
+                leaveGame();
+            }
+        }
+
+        function leaveGame() {
+            clearInterval(timerInterval);
+            isDrawingMode = false;
+            roundCount = 1;
+            players.forEach(p => p.score = 0);
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            
+            document.querySelectorAll('.absolute.inset-0.z-40, .absolute.inset-0.z-50, .absolute.inset-0.z-\\[60\\]').forEach(el => {
+                if(el.id !== 'authScreen' && el.id !== 'lobbyScreen' && el.id !== 'customDialog') {
+                    el.classList.add('hidden');
+                    el.classList.remove('flex');
+                }
+            });
+            document.getElementById('mainGameArea').classList.remove('flex');
+            document.getElementById('mainGameArea').classList.add('hidden');
+            
+            populateHistory(); 
+            document.getElementById('lobbyScreen').classList.remove('hidden');
+            document.getElementById('lobbyScreen').classList.add('flex');
+        }
+
+        // ==================== LOBBY CHAT (GAME CHAT) LOGIC ====================
+        const gameChatForm = document.getElementById('chatForm');
+        const gameChatInput = document.getElementById('chatInput');
+        const gameChatBox = document.getElementById('chatBox');
+
+        function addGameMessage(sender, text, isSystem = false) {
+            const div = document.createElement('div');
+            div.className = 'animate-slide-in text-sm break-words bg-white/5 p-3 rounded-2xl border border-white/5';
+            if (isSystem) {
+                div.innerHTML = `<span class="text-yellow-400 font-bold block">${text}</span>`;
+                div.className = 'animate-slide-in text-sm break-words bg-yellow-500/10 p-3 rounded-2xl border border-yellow-500/20 text-center';
+            } else {
+                div.innerHTML = `<span class="font-bold ${sender.includes("You") ? 'text-neon-cyan' : 'text-neon-pink'} mb-1 block text-xs uppercase tracking-wider">${sender}</span> <span class="text-white font-medium">${text}</span>`;
+            }
+            gameChatBox.appendChild(div);
+            gameChatBox.scrollTop = gameChatBox.scrollHeight;
+        }
+
+        gameChatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = gameChatInput.value.trim();
+            if(!text) return;
+            addGameMessage(myName + " (You)", text);
+            gameChatInput.value = '';
+        });
+
+        // ==================== CANVAS LOGIC (UI Enhancements) ====================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const canvasContainer = document.getElementById('canvasContainer');
+        
+        let isDrawing = false;
+        let currentColor = '#000000';
+        let currentBrushSize = 5;
+
+        const paletteColors = ['#000000', '#ffffff', '#ef4444', '#22c55e', '#3b82f6', '#eab308', '#d946ef', '#06b6d4', '#f97316', '#8b5cf6'];
+        const paletteContainer = document.getElementById('colorPalette');
+        
+        paletteColors.forEach(color => {
+            const btn = document.createElement('button');
+            btn.className = `w-8 h-8 md:w-10 md:h-10 shrink-0 rounded-full shadow-inner border-[3px] ${color === '#000000' ? 'border-gray-400 scale-110' : 'border-transparent'} transform transition-all hover:scale-110`;
+            btn.style.backgroundColor = color;
+            if(color === '#ffffff') btn.style.border = '2px solid #e5e5e5'; 
+            
+            btn.onclick = () => {
+                currentColor = color;
+                Array.from(paletteContainer.children).forEach(c => {
+                    c.classList.remove('scale-110', 'border-gray-400');
+                    c.classList.add('border-transparent');
+                });
+                btn.classList.remove('border-transparent');
+                btn.classList.add('border-gray-400', 'scale-110');
+            };
+            paletteContainer.appendChild(btn);
+        });
+
+        function resizeCanvas() {
+            const rect = canvasContainer.getBoundingClientRect();
+            if(rect.width === 0) return;
+            canvas.width = rect.width - 16; 
+            canvas.height = rect.height - 16;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function startPosition(e) {
+            isDrawing = true;
+            draw(e);
+        }
+
+        function endPosition() {
+            isDrawing = false;
+            ctx.beginPath();
+        }
+
+        function draw(e) {
+            if (!isDrawing || !isDrawingMode) return;
+            e.preventDefault(); 
+            const rect = canvas.getBoundingClientRect();
+            let clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            let clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            ctx.lineWidth = currentBrushSize;
+            ctx.strokeStyle = currentColor;
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        canvas.addEventListener('mousedown', startPosition);
+        canvas.addEventListener('mouseup', endPosition);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseout', endPosition);
+        canvas.addEventListener('touchstart', startPosition, {passive: false});
+        canvas.addEventListener('touchend', endPosition);
+        canvas.addEventListener('touchmove', draw, {passive: false});
+
+        const brushSlider = document.getElementById('brushSize');
+        const brushDisplay = document.getElementById('brushSizeDisplay');
+        brushSlider.addEventListener('input', (e) => {
+            currentBrushSize = e.target.value;
+            brushDisplay.style.transform = `scale(${currentBrushSize / 15})`;
+            brushDisplay.style.backgroundColor = currentColor === '#ffffff' ? '#ccc' : currentColor;
+        });
+
+        function setEraser() {
+            currentColor = '#ffffff';
+            Array.from(paletteContainer.children).forEach(c => {
+                c.classList.remove('scale-110', 'border-gray-400');
+                c.classList.add('border-transparent');
+            });
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // ==================== GAME FLOW (ROUND, TIMER, AI) ====================
+        function showCustomWordScreen() {
+            const wordScreen = document.getElementById('wordSelectionScreen');
+            document.getElementById('nextRoundNum').innerText = roundCount;
+            document.getElementById('customWordInput').value = '';
+            wordScreen.classList.remove('hidden');
+            wordScreen.classList.add('flex');
+        }
+
+        async function startNewRound() {
+            const inputWord = document.getElementById('customWordInput').value.trim();
+            if(!inputWord) {
+                await customAlert("Please type a word for everyone to draw!");
+                return;
+            }
+            
+            targetWord = inputWord;
+            document.getElementById('wordToDraw').innerText = targetWord;
+            document.getElementById('roundIndicator').innerText = `Round ${roundCount}/${totalRounds}`;
+            
+            const wordScreen = document.getElementById('wordSelectionScreen');
+            wordScreen.classList.remove('flex');
+            wordScreen.classList.add('hidden');
+            
+            clearCanvas();
+            isDrawingMode = true;
+            addGameMessage('', `Round ${roundCount} Started! Everyone has to draw "${targetWord}".`, true);
+            startTimer();
+        }
+
+        function updateLeaderboard() {
+            const board = document.getElementById('leaderboard');
+            board.innerHTML = '';
+            const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+            
+            sortedPlayers.forEach((p, index) => {
+                let rankIcon = '';
+                let bgClass = p.isMe ? 'bg-neon-cyan/20 border border-neon-cyan/50' : 'bg-white/5 border border-transparent';
+                
+                if(index === 0 && p.score > 0) rankIcon = '<i class="fas fa-crown text-yellow-400 ml-2"></i>';
+                
+                board.innerHTML += `
+                    <div class="flex items-center gap-3 p-3 rounded-2xl transition-all ${bgClass}">
+                        <div class="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center font-bold text-white shadow-inner">
+                            ${p.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h4 class="font-bold text-sm truncate text-white">${p.name}${rankIcon}</h4>
+                            <p class="text-xs text-neon-cyan font-bold">${p.score} pts</p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        let timeLeft = 60;
+        let timerInterval;
+
+        function startTimer() {
+            const timerEl = document.getElementById('timer');
+            timeLeft = 60; 
+            timerEl.innerText = timeLeft;
+            timerEl.classList.remove('animate-pulse-fast', 'text-red-500');
+            timerEl.parentElement.classList.replace('border-red-500', 'border-neon-cyan');
+
+            timerInterval = setInterval(() => {
+                if(timeLeft > 0) {
+                    timeLeft--;
+                    timerEl.innerText = timeLeft;
+                    if(timeLeft <= 10 && timeLeft > 0) {
+                        timerEl.classList.add('animate-pulse-fast', 'text-red-500');
+                        timerEl.parentElement.classList.replace('border-neon-cyan', 'border-red-500');
+                    }
+                } else {
+                    clearInterval(timerInterval);
+                    timerEl.innerText = "0";
+                    startAIJudging();
+                }
+            }, 1000);
+        }
+
+        function startAIJudging() {
+            isDrawingMode = false;
+            const myDrawingData = canvas.toDataURL("image/png");
+            
+            const judgingScreen = document.getElementById('judgingScreen');
+            document.getElementById('judgingImage').src = myDrawingData;
+            
+            // Generate Real Image using Pollinations AI 
+            const aiImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(targetWord + " realistic high quality")}?width=400&height=400&nologo=true`;
+            document.getElementById('aiTargetImage').src = aiImageUrl;
+            
+            judgingScreen.classList.remove('hidden');
+            judgingScreen.classList.add('flex');
+
+            const textEl = document.getElementById('judgingText');
+            
+            setTimeout(() => { textEl.innerText = `Fetching real image of "${targetWord}"...`; }, 1000);
+            setTimeout(() => { textEl.innerText = `Comparing your drawing with reality...`; }, 3000);
+            setTimeout(() => { textEl.innerText = "Calculating match percentage..."; }, 5000);
+            
+            setTimeout(() => {
+                judgingScreen.classList.remove('flex');
+                judgingScreen.classList.add('hidden');
+                textEl.innerText = "AI Analysis in Progress..."; 
+                declareWinner(myDrawingData, aiImageUrl);
+            }, 7000);
+        }
+
+        function declareWinner(myDrawingData, aiImageUrl) {
+            const myAccuracy = Math.floor(Math.random() * 80) + 20;
+            const bot1Accuracy = Math.floor(Math.random() * 75) + 10;
+            const bot2Accuracy = Math.floor(Math.random() * 75) + 10;
+
+            let winner = players[0];
+            let maxAccuracy = myAccuracy;
+            document.getElementById('winnerImage').src = myDrawingData; 
+            document.getElementById('winnerTargetImage').src = aiImageUrl; // AI reference photo
+
+            if(bot1Accuracy > maxAccuracy) { 
+                winner = players[1]; 
+                maxAccuracy = bot1Accuracy;
+                document.getElementById('winnerImage').src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="; 
+            }
+            if(bot2Accuracy > maxAccuracy) { 
+                winner = players[2]; 
+                maxAccuracy = bot2Accuracy;
+                document.getElementById('winnerImage').src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="; 
+            }
+
+            const winnerScreen = document.getElementById('winnerScreen');
+            const winnerPanel = document.getElementById('winnerPanel');
+            const winnerTitle = document.getElementById('winnerTitle');
+            const winnerText = document.getElementById('winnerText');
+            const winnerSubText = document.getElementById('winnerSubText');
+            const resultIcon = document.getElementById('resultIcon');
+            const winnerImageFrame = document.getElementById('winnerImageFrame');
+            const winnerImageLabel = document.getElementById('winnerImageLabel');
+
+            if (winner.isMe) {
+                winnerPanel.className = "bg-gray-900 p-8 md:p-12 rounded-[3rem] text-center border-t-4 border-yellow-400 shadow-[0_0_60px_rgba(251,191,36,0.3)] transform scale-100 animate-slide-in w-11/12 max-w-3xl relative overflow-hidden my-auto";
+                resultIcon.className = "fas fa-trophy text-5xl md:text-7xl text-yellow-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.8)] relative z-10";
+                winnerTitle.className = "text-3xl md:text-5xl font-display text-yellow-400 mb-2 tracking-wide relative z-10";
+                winnerTitle.innerText = "CONGRATULATIONS!";
+                winnerText.className = "text-base md:text-xl text-gray-200 mb-6 md:mb-8 font-semibold relative z-10";
+                winnerText.innerHTML = `AI found your drawing <span class="text-neon-cyan font-bold text-3xl mx-2">${maxAccuracy}%</span> accurate to "${targetWord}"!`;
+                winnerSubText.innerText = "You made the best drawing. +100 Points!";
+                
+                winnerImageFrame.className = "w-32 h-32 md:w-48 md:h-48 border-4 border-neon-cyan rounded-2xl overflow-hidden shadow-2xl bg-white p-2";
+                winnerImageLabel.innerText = "Your Drawing";
+                winnerImageLabel.className = "mt-3 text-xs md:text-sm font-bold text-neon-cyan";
+                
+                players[0].score += 100;
+                addGameMessage('', `🎉 You won! AI accuracy: ${maxAccuracy}%`, true);
+            } else {
+                winnerPanel.className = "bg-gray-900 p-8 md:p-12 rounded-[3rem] text-center border-t-4 border-red-500 shadow-[0_20px_60px_rgba(239,68,68,0.3)] transform scale-100 animate-slide-in w-11/12 max-w-3xl relative overflow-hidden my-auto";
+                resultIcon.className = "fas fa-times-circle text-5xl md:text-7xl text-red-500 drop-shadow-[0_0_20px_rgba(239,68,68,0.8)] relative z-10";
+                winnerTitle.className = "text-3xl md:text-5xl font-display text-red-500 mb-2 tracking-wide relative z-10";
+                winnerTitle.innerText = "OOPS!";
+                winnerText.className = "text-base md:text-xl text-gray-200 mb-6 md:mb-8 font-semibold relative z-10";
+                winnerText.innerHTML = `AI found your drawing <span class="text-red-400 font-bold text-3xl mx-2">${myAccuracy}%</span> accurate to "${targetWord}".`;
+                winnerSubText.innerText = `${winner.name} won the round with ${maxAccuracy}% score!`;
+                
+                winnerImageFrame.className = "w-32 h-32 md:w-48 md:h-48 border-4 border-gray-600 rounded-2xl overflow-hidden shadow-2xl bg-white p-2 opacity-50 grayscale";
+                winnerImageLabel.innerText = `${winner.name}'s Drawing`;
+                winnerImageLabel.className = "mt-3 text-xs md:text-sm font-bold text-red-400";
+                
+                winner.score += 100;
+                addGameMessage('', `😢 ${winner.name} won (Accuracy: ${maxAccuracy}%)`, true);
+            }
+
+            updateLeaderboard();
+            winnerScreen.classList.remove('hidden');
+            winnerScreen.classList.add('flex');
+
+            setTimeout(() => {
+                winnerScreen.classList.remove('flex');
+                winnerScreen.classList.add('hidden');
+                
+                roundCount++;
+                if(roundCount <= totalRounds) {
+                    showCustomWordScreen();
+                } else {
+                    handleGameOver();
+                }
+            }, 6000);
+        }
+
+        function handleGameOver() {
+            const finalScreen = document.getElementById('finalScreen');
+            const finalLeaderboardList = document.getElementById('finalLeaderboardList');
+            const finalWinnerText = document.getElementById('finalWinnerText');
+            
+            const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+            const overallWinner = sortedPlayers[0];
+
+            // Add to History
+            const today = new Date();
+            const dateString = `${today.getDate()}/${today.getMonth()+1} - ${today.getHours()}:${today.getMinutes()}`;
+            
+            gameHistory.unshift({
+                date: dateString,
+                word: "Tournament (3 Rounds)",
+                score: players[0].score,
+                rank: sortedPlayers[0].id === players[0].id ? "1st" : (sortedPlayers[1].id === players[0].id ? "2nd" : "3rd")
+            });
+            localStorage.setItem('chitraKalaHistory', JSON.stringify(gameHistory));
+
+            finalLeaderboardList.innerHTML = '';
+            sortedPlayers.forEach((p, index) => {
+                let badge = index === 0 ? '<i class="fas fa-crown text-yellow-400"></i>' : (index === 1 ? '<i class="fas fa-medal text-gray-300"></i>' : '<i class="fas fa-award text-orange-400"></i>');
+                let bgClass = p.isMe ? 'bg-neon-cyan/10 border-neon-cyan/50' : 'bg-white/5 border-white/10';
+                
+                finalLeaderboardList.innerHTML += `
+                    <div class="flex justify-between items-center ${bgClass} p-4 rounded-2xl border transition-all hover:bg-white/10">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xl w-6 text-center">${badge}</span>
+                            <span class="font-bold text-white text-lg">${p.name}</span>
+                        </div>
+                        <span class="text-neon-cyan font-bold text-xl">${p.score} <span class="text-xs text-gray-400 font-medium">pts</span></span>
+                    </div>
+                `;
+            });
+
+            if (overallWinner.isMe) {
+                finalWinnerText.innerText = "You Won the Game!";
+                finalWinnerText.className = "text-3xl text-neon-cyan mb-8 font-bold animate-pulse relative z-10";
+            } else {
+                finalWinnerText.innerText = `${overallWinner.name} Won!`;
+                finalWinnerText.className = "text-3xl text-neon-pink mb-8 font-bold relative z-10";
+            }
+
+            finalScreen.classList.remove('hidden');
+            finalScreen.classList.add('flex');
+            
+            addGameMessage('', `GAME OVER! Final Winner: ${overallWinner.name}`, true);
+            announceWinner(overallWinner.name, overallWinner.isMe);
+        }
+
+        function announceWinner(winnerName, isMe) {
+            if ('speechSynthesis' in window) {
+                let cleanName = winnerName.replace(" (You)", "");
+                let textToSpeak = isMe 
+                    ? `Congratulations ${cleanName}, you have won this game. Your drawings were amazing!`
+                    : `Game over! ${cleanName} won this time. Better luck next time.`;
+                
+                const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                utterance.lang = 'en-US'; 
+                utterance.rate = 0.9; 
+                utterance.pitch = 1.1; 
+                
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function restartGame() {
+            leaveGame(); 
+        }
+
+    </script>
+</body>
+</html>
