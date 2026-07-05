@@ -11,7 +11,7 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;800&family=Righteous&display=swap" rel="stylesheet">
     <!-- Socket.io -->
-    <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+    <script src="https://drawingbattle.onrender.com/socket.io/socket.io.js"></script>
     
     <script>
         tailwind.config = {
@@ -666,7 +666,7 @@
         }
 
         // --- API & SOCKET CONFIG ---
-        const API_BASE_URL = 'http://localhost:3000';
+        const API_BASE_URL = 'https://drawingbattle.onrender.com';
         let socket;
         try {
             socket = io(API_BASE_URL);
