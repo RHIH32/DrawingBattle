@@ -17,13 +17,8 @@ app.use(cors());
 app.use(express.json());
 
 // ================= MONGODB SETUP =================
-// Secrets ab code mein nahi, balki environment variables se aayenge
-const MONGO_URI = process.env.MONGODB_URI;
-
-if (!MONGO_URI) {
-    console.error("❌ ERROR: MONGODB_URI is not defined in environment variables!");
-    process.exit(1); // Agar password nahi milega toh server secure rehne ke liye ruk jayega
-}
+// Direct code mein database link (Sirf private use ke liye)
+const MONGO_URI = "mongodb+srv://ravik884857_db_user:a1B2c3D4e5F6g7H8@cluster0.poitmy1.mongodb.net/chatbox?retryWrites=true&w=majority";
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log("✅ MongoDB Connected!"))
@@ -38,12 +33,7 @@ const UserSchema = new mongoose.Schema({
 const User = mongoose.model('User', UserSchema);
 
 // ================= API ROUTES (AUTH) =================
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-    console.error("❌ ERROR: JWT_SECRET is not defined in environment variables!");
-    process.exit(1);
-}
+const JWT_SECRET = "ChatBox@2024_SuperSecretKey_abc123xyz789!";
 
 app.post('/api/auth/register', async (req, res) => {
     try {
