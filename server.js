@@ -16,6 +16,12 @@ const io = new Server(server, { cors: { origin: '*' } });
 app.use(cors());
 app.use(express.json());
 
+// ================= BASIC ROUTE =================
+// Yeh route 'Cannot GET /' wale error ko theek karega
+app.get('/', (req, res) => {
+    res.send('Art-Battle Multiplayer Server is Running! 🚀');
+});
+
 // ================= MONGODB SETUP =================
 // Direct code mein database link (Sirf private use ke liye)
 const MONGO_URI = "mongodb+srv://ravik884857_db_user:a1B2c3D4e5F6g7H8@cluster0.poitmy1.mongodb.net/chatbox?retryWrites=true&w=majority";
