@@ -1492,9 +1492,9 @@
         function announceWinner(winnerName, isMe) {
             if ('speechSynthesis' in window) {
                 let cleanName = winnerName.replace(" (You)", "");
-                let textToSpeak = isMe 
-                    ? `Congratulations ${cleanName}, you have won this game. Your drawings were amazing!`
-                    : `Game over! ${cleanName} won this time. Better luck next time.`;
+                let textToSpeak = isMe
+    ? `Congratulations ${cleanName}! आपने यह game जीत लिया है। आपका drawing शानदार था।`
+    : `Game Over! इस बार ${cleanName} ने game जीत लिया। Better luck next time!`;
                 
                 const utterance = new SpeechSynthesisUtterance(textToSpeak);
                 utterance.lang = 'en-US'; 
